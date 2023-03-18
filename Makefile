@@ -1,8 +1,8 @@
 CC=gcc
 CFLAGS=
-LFLAGS=
+LFLAGS=-lSDL2
 SRC=src
-BIN=bin
+BIN=build
 MAIN=main
 
 all:
