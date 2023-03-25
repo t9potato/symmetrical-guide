@@ -2,10 +2,12 @@
 #include <SDL2/SDL_events.h>
 #include <SDL2/SDL_keycode.h>
 #include <SDL2/SDL_mouse.h>
+#include <SDL2/SDL_pixels.h>
 #include <SDL2/SDL_render.h>
 #include <SDL2/SDL_stdinc.h>
 #include <SDL2/SDL_timer.h>
 #include <SDL2/SDL_video.h>
+//#include <cstring>
 #include <stdlib.h>
 
 typedef float    f32;
@@ -21,12 +23,15 @@ typedef int64_t  i64;
 typedef size_t   usize;
 typedef ssize_t  isize;
 
+void draw_pixel(SDL_Texture *screen, usize x, usize y, u8 R, u8 G, u8 B);
+
+
 typedef struct {
-    double direction;
-    float x;
-    float y;
-    float f_vel;
-    double r_vel;
+    f64 direction;
+    f32 x;
+    f32 y;
+    f32 f_vel;
+    f64 r_vel;
 } player;
 
 #define WIDTH 1200
@@ -56,6 +61,12 @@ int main(int argc, char *argv[]) {
     u32 window_id = SDL_GetWindowID(window);
     SDL_Renderer *render = SDL_CreateRenderer(window,
             -1, SDL_RENDERER_SOFTWARE);
+    SDL_Texture *texture = SDL_CreateTexture(render, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, WIDTH / 5, HEIGHT / 5);
+    u32 pixels[WIDTH/5 * HEIGHT/5];
+
+    player character = {
+        0.0, 4.0, 4.0, 0.0, 0.0
+    };
 
     SDL_SetRelativeMouseMode(SDL_TRUE);
     for (;;) {
@@ -91,7 +102,14 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
+        SDL_UpdateTexture(texture, NULL, pixels, WIDTH/5 * 4);
+        SDL_RenderCopy(render, texture, NULL, NULL);
         SDL_RenderPresent(render);
+        SDL_memset4(pixels, 0x0000ff00, sizeof(pixels)/4);
         SDL_Delay(1);
     }
+}
+
+void draw_pixel(SDL_Texture *screen, usize x, usize y, u8 R, u8 G, u8 B) {
+
 }
