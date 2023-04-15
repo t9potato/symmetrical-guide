@@ -8,7 +8,9 @@
 #include <SDL2/SDL_timer.h>
 #include <SDL2/SDL_video.h>
 //#include <cstring>
+#include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 typedef float    f32;
 typedef double   f64;
@@ -23,8 +25,17 @@ typedef int64_t  i64;
 typedef size_t   usize;
 typedef ssize_t  isize;
 
-void draw_pixel(SDL_Texture *screen, usize x, usize y, u8 R, u8 G, u8 B);
+#define WIDTH 1200
+#define HEIGHT 675
+#define MAP_SIZE 8
+#define RAYCAST_PRECISION 64
+#define RENDER_DISTANCE 255
 
+#define set_pixel(pixels, x, y, color) (*(pixels + x + y * WIDTH/5) = color << 8)
+#define vertical_line(pixels, x, top, length, color) for (int _i = top; _i < top + length; _i++) set_pixel(pixels, x, _i, color)
+#define horisontal_line(pixels, y, left, length, color) for (int _i = left; _i < left + length; _i++) set_pixel(pixels, y, _i, color)
+#define rad(value) (f32) value * M_PI /180
+#define square(value) (value) * (value)
 
 typedef struct {
     f64 direction;
@@ -32,12 +43,11 @@ typedef struct {
     f32 y;
     f32 f_vel;
     f64 r_vel;
+    u8  fov;
 } player;
 
-#define WIDTH 1200
-#define HEIGHT 675
+void raycast_render(player character, u32 pixels[WIDTH/5 * HEIGHT/5], u8 map[MAP_SIZE * MAP_SIZE]);
 
-#define MAP_SIZE 8
 static u8 MAP[MAP_SIZE * MAP_SIZE] = {
     1, 1, 1, 1, 1, 1, 1, 1,
     1, 0, 0, 0, 0, 0, 0, 1,
@@ -65,7 +75,7 @@ int main(int argc, char *argv[]) {
     u32 pixels[WIDTH/5 * HEIGHT/5];
 
     player character = {
-        0.0, 4.0, 4.0, 0.0, 0.0
+        0.0, 4.0, 4.0, 0.0, 0.0, 60
     };
 
     SDL_SetRelativeMouseMode(SDL_TRUE);
@@ -90,6 +100,9 @@ int main(int argc, char *argv[]) {
                         case SDLK_ESCAPE: {
                             SDL_SetRelativeMouseMode(SDL_FALSE);
                         }
+                        case SDLK_w: {
+                            character.f_vel += 0.1;
+                        }
                     }
                     break;
                 }
@@ -102,14 +115,33 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
+        raycast_render(character, pixels, MAP);
         SDL_UpdateTexture(texture, NULL, pixels, WIDTH/5 * 4);
         SDL_RenderCopy(render, texture, NULL, NULL);
         SDL_RenderPresent(render);
-        SDL_memset4(pixels, 0x0000ff00, sizeof(pixels)/4);
+        SDL_memset4(pixels, 0x00000000, sizeof(pixels)/4);
         SDL_Delay(1);
     }
 }
 
-void draw_pixel(SDL_Texture *screen, usize x, usize y, u8 R, u8 G, u8 B) {
+void raycast_render(player character, u32 pixels[WIDTH/5 * HEIGHT/5], u8 map[MAP_SIZE * MAP_SIZE]) {
+    f64 angle = character.direction - rad(character.fov) / 2;
 
+    for (u8 ray_count = 0;  ray_count < WIDTH/5; ray_count++) {
+        f64 ray_sin = sin(angle)/RAYCAST_PRECISION;
+        f64 ray_cos = cos(angle)/RAYCAST_PRECISION;
+        f32 ray_x = character.x + ray_sin;
+        f32 ray_y = character.y + ray_cos;
+        for (u8 i = 0; i < RENDER_DISTANCE; i++) {
+            if(map[(int)ray_x + (int)ray_y * MAP_SIZE]) {
+                u32 height = (int) floor((HEIGHT/5.0)/sqrt(square(character.x - ray_x) + square(character.y - ray_y)));
+                vertical_line(pixels, ray_count, (HEIGHT/5 - height)/2, height/2 * 2, 0xffffff);
+                break;
+            }
+            ray_x += ray_sin;
+            ray_y += ray_cos;
+        }
+
+        angle += rad(character.fov) * 5.0 /WIDTH;
+    }
 }

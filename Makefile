@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS=
-LFLAGS=-lSDL2
+LFLAGS=-lSDL2 -lm
 SRC=src
 BIN=build
 MAIN=main
