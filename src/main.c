@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 
 typedef float    f32;
 typedef double   f64;
@@ -27,9 +28,10 @@ typedef ssize_t  isize;
 
 #define WIDTH 2400
 #define HEIGHT 1360
-#define MAP_SIZE 10
 #define RAYCAST_PRECISION 64
-#define RENDER_DISTANCE RAYCAST_PRECISION * 7
+#define RENDER_DISTANCE RAYCAST_PRECISION * 10
+#define CEIL_HEIGHT HEIGHT/10 - 7*HEIGHT/680
+#define MAX_MAP_WIDTH 2*25
 
 #define SENSITIVITY 0.001
 #define MAX_ROT_SPEED 0.01
@@ -59,27 +61,26 @@ typedef struct {
     input rot;
 } player;
 
-void raycast_render(player character, u32 pixels[WIDTH/5 * HEIGHT/5], u8 map[MAP_SIZE * MAP_SIZE]);
-void update_player(player *character, u8 map[square(MAP_SIZE)]);
+typedef struct {
+    u8 map_width;
+    u8 map_height;
+    u8 *map;
+} map_info;
+
+void raycast_render(player character, u32 pixels[WIDTH/5 * HEIGHT/5], map_info map);
+void update_player(player *character, map_info map);
+map_info load_map(char *level);
+void drop_map(map_info map);
 
 #define WALL_1 0xffffff
-#define WALL_2 0xff0000
-#define WALL_3 0x00ff00
+#define WALL_2 0x7acbf5
+#define WALL_3 0xeaacb8
 #define WALL_4 0x0000ff
 #define WALL_5 0xff00ff
 
-static u8 MAP[MAP_SIZE * MAP_SIZE] = {
-        1,1,1,1,1,1,1,1,1,1,
-        1,0,0,0,0,0,0,0,0,1,
-        1,0,0,0,0,0,0,0,0,1,
-        1,0,0,1,1,0,1,0,0,1,
-        1,0,0,1,0,0,1,0,0,1,
-        1,0,0,1,0,0,1,0,0,1,
-        1,0,0,1,0,1,1,0,0,1,
-        1,0,0,0,0,0,0,0,0,1,
-        1,0,0,0,0,0,0,0,0,1,
-        1,1,1,1,1,1,1,1,1,1,
-};
+#define FLOOR 0x000000
+#define CEIL 0x222222
+
 
 
 int main(int argc, char *argv[]) {
@@ -98,8 +99,12 @@ int main(int argc, char *argv[]) {
     u32 pixels[WIDTH/5 * HEIGHT/5];
 
     player character = {
-        0.0, 1.0, 2.0, 0.0, 0.0, 60, 1, 1
+        0.0, 2.0, 2.0, 0.0, 0.0, 60, 1, 1
     };
+    map_info map = load_map("levels/level1");
+    if (map.map == NULL) {
+        exit(1);
+    }
 
     SDL_SetRelativeMouseMode(SDL_TRUE);
     for (;;) {
@@ -176,8 +181,8 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
-        update_player(&character, MAP);
-        raycast_render(character, pixels, MAP);
+        update_player(&character, map);
+        raycast_render(character, pixels, map);
         SDL_UpdateTexture(texture, NULL, pixels, WIDTH/5 * 4);
         SDL_RenderCopy(render, texture, NULL, NULL);
         SDL_RenderPresent(render);
@@ -186,7 +191,7 @@ int main(int argc, char *argv[]) {
     }
 }
 
-void raycast_render(player character, u32 pixels[WIDTH/5 * HEIGHT/5], u8 map[MAP_SIZE * MAP_SIZE]) {
+void raycast_render(player character, u32 pixels[WIDTH/5 * HEIGHT/5], map_info map) {
     f64 angle = character.direction - rad(character.fov) / 2;
 
     for (u16 ray_count = 0;  ray_count < WIDTH/5; ray_count++) {
@@ -194,14 +199,16 @@ void raycast_render(player character, u32 pixels[WIDTH/5 * HEIGHT/5], u8 map[MAP
         f64 ray_cos = cos(angle)/RAYCAST_PRECISION;
         f32 ray_x = character.x;
         f32 ray_y = character.y;
+        vertical_line(pixels, ray_count, 0, CEIL_HEIGHT, CEIL);
+        vertical_line(pixels, ray_count, (HEIGHT/10), HEIGHT/10, FLOOR);
         for (u16 i = 0; i < RENDER_DISTANCE; i++) {
-            if(map[(int)ray_x + (int)ray_y * MAP_SIZE]) {
+            if(map.map[(int)ray_x + (int)ray_y * map.map_width]) {
                 f32 dist = sqrt(square(character.x - ray_x) + square(character.y - ray_y));
                 dist *= cos(angle - character.direction);
                 u32 height = (int)floor((HEIGHT/5.0)/(dist >=1?dist:1));
                 height = height >> 1 << 1;
                 u32 color;
-                switch (map[(int)ray_x + (int)ray_y*MAP_SIZE]) {
+                switch (map.map[(int)ray_x + (int)ray_y*map.map_width]) {
                     case 1:
                         color = WALL_1;
                         break;
@@ -229,7 +236,8 @@ void raycast_render(player character, u32 pixels[WIDTH/5 * HEIGHT/5], u8 map[MAP
     }
 }
 
-void update_player(player *character, u8 map[square(MAP_SIZE)]) {
+void update_player(player *character, map_info map) {
+    char *e = "testing";
     if (character->mov == POS && character->f_vel < MAX_SPEED)
         character->f_vel += ACCELERATION;
     else if (character->mov == NEG && character->f_vel > -MAX_SPEED)
@@ -255,10 +263,45 @@ void update_player(player *character, u8 map[square(MAP_SIZE)]) {
             character->r_vel = 0;
     }
     character->direction += character->r_vel;
-    character->x += cos(character->direction) * character->f_vel;
-    character->y += sin(character->direction) * character->f_vel;
-//  if (map[(int)(round(character->x) + round(character->y)*MAP_SIZE)]) {
-//      character->x = 4;
-//      character->y = 4;
-//  }
+    if (character->direction > 2 * M_PI)
+        character->direction -= 2*M_PI;
+    f32 x_vel = cos(character->direction) * character->f_vel;
+    f32 y_vel = sin(character->direction) * character->f_vel;
+    character->x += x_vel;
+    if (map.map[(int)floor(character->x) + (int)floor(character->y) * map.map_width]) {
+        character->x -= x_vel;
+    }
+    character->y += y_vel;
+    if (map.map[(int)floor(character->x) + (int)floor(character->y) * map.map_width]) {
+        character->y -= y_vel;
+    }
+}
+
+
+map_info load_map(char *level) {
+    FILE *map_source = fopen(level, "r");
+    if (map_source == NULL) {
+        fclose(map_source);
+        map_info map = { -1, -1, NULL };
+        return map;
+    }
+    const char delim[2] = ",";
+    char contents[MAX_MAP_WIDTH];
+    fgets(contents, MAX_MAP_WIDTH, map_source);
+    int map_width, map_height;
+    sscanf(contents, "%i,%i", &map_width, &map_height);
+    map_info map = { map_width, map_height, malloc(map_width * map_height * sizeof(u8)) };
+    i32 i = 0;
+    while (fgets(contents, MAX_MAP_WIDTH, map_source) != NULL) {
+        for (u16 k = 0; k < map.map_width; k++) {
+            sscanf((contents + 2*k), "%s,", (map.map + i));
+            map.map[i] -= 48;
+            i++;
+        }
+    }
+    return map;
+}
+
+void drop_map(map_info map) {
+   // free(map.map);
 }

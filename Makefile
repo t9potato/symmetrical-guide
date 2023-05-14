@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=
+CFLAGS=-g
 LFLAGS=-lSDL2 -lm
 SRC=src
 BIN=build
